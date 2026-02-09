@@ -28,20 +28,25 @@ Install the package via Composer:
 
 ```bash
 composer require gatewire/clientQuick Start
-1. Initialize the Client
+```
+---
+
+### 1. Initialize the Client
 First, obtain your API Key from the GateWire Dashboard.
 
-PHP
+```php
 require 'vendor/autoload.php';
 
 use GateWire\GateWire;
 
 // Initialize with your API Key
 $gatewire = new GateWire('sk_live_YOUR_API_KEY_HERE');
-2. Send an SMS (Standard Route)
+```
+
+### 2. Send an SMS (Standard Route)
 Send a simple text message to any Algerian number (+213).
 
-PHP
+```php
 try {
     $response = $gatewire->dispatch(
         to: '+213555123456', 
@@ -53,10 +58,12 @@ try {
 } catch (\GateWire\Exceptions\GateWireException $e) {
     echo "Error: " . $e->getMessage();
 }
-3. Send via Template (Priority Route)
+```
+
+### 3. Send via Template (Priority Route)
 For OTPs and 2FA, we highly recommend using Templates. This ensures your message skips the standard queue and uses the High Priority lane.
 
-PHP
+```php
 $response = $gatewire->dispatch(
     to: '+213555123456',
     options: [
@@ -64,18 +71,19 @@ $response = $gatewire->dispatch(
         'priority'     => 'high'       // Force high priority routing
     ]
 );
-4. Check Account Balance
+```
+### 4. Check Account Balance
 Retrieve your current remaining credit balance in DZD.
 
-PHP
+```php
 $balance = $gatewire->getBalance();
 echo "Current Balance: " . $balance . " DZD";
-Laravel Integration
+```
+## Laravel Integration
 If you are using Laravel, you can register the client as a singleton in your AppServiceProvider.
 
+```php
 app/Providers/AppServiceProvider.php
-
-PHP
 use GateWire\GateWire;
 
 public function register()
@@ -85,14 +93,17 @@ public function register()
     });
 }
 config/services.php
+```
 
-PHP
+```php
 'gatewire' => [
     'key' => env('GATEWIRE_API_KEY'),
 ],
-Usage in Controller:
+```
 
-PHP
+## Usage in Controller:
+
+```php
 use GateWire\GateWire;
 
 public function sendOtp(Request $request, GateWire $gatewire)
@@ -100,10 +111,12 @@ public function sendOtp(Request $request, GateWire $gatewire)
     $gatewire->dispatch($request->phone, 'Your code is 123456');
     return response()->json(['status' => 'sent']);
 }
-Error Handling
+```
+
+## Error Handling
 The SDK throws GateWire\Exceptions\GateWireException for any API error (4xx or 5xx). You should always wrap your calls in a try-catch block.
 
-PHP
+```php
 use GateWire\Exceptions\GateWireException;
 
 try {
@@ -117,12 +130,14 @@ try {
         // "No active devices available in the network"
     }
 }
-Support & Community
-Documentation: Read the full docs
+```
 
-Issues: Report a bug
+## Support & Community
+### Documentation: Read the full docs
 
-Email: dev@gatewire.com
+### Issues: Report a bug
 
-License
+Email: dev@raystate.com
+
+## License
 The GateWire PHP SDK is open-sourced software licensed under the MIT license.
