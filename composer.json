@@ -1,0 +1,21 @@
+{
+    "name": "gatewire/client",
+    "description": "Official PHP SDK for the GateWire SMS Infrastructure.",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "GateWire Team",
+            "email": "dev@gatewire.com"
+        }
+    ],
+    "require": {
+        "php": "^8.1",
+        "guzzlehttp/guzzle": "^7.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "GateWire\\": "src/"
+        }
+    }
+}
