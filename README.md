@@ -215,6 +215,39 @@ Base URL: `https://gatewire.raystate.com/api/v1`
 
 ---
 
+## Testing
+
+The SDK ships with a PHPUnit 10 test suite covering all public methods, request shapes, and error
+paths. No network calls are made — responses are mocked with Guzzle's `MockHandler`.
+
+Install dev dependencies and run the suite:
+
+```bash
+composer install
+composer test
+# or directly:
+./vendor/bin/phpunit
+```
+
+Expected output:
+
+```
+PHPUnit 10.5.x by Sebastian Bergmann and contributors.
+
+......................                                            22 / 22 (100%)
+
+OK (22 tests, 45 assertions)
+```
+
+**Coverage:**
+
+| Test file | What is tested |
+|---|---|
+| `tests/GateWireTest.php` | `dispatch()`, `verifyOtp()`, `status()` — success responses, request body shape, correct HTTP method + endpoint path, all documented error codes (400, 402, 429, 503, 500), non-JSON response guard |
+| `tests/GateWireExceptionTest.php` | `GateWireException::fromResponse()` — message, code, instance type |
+
+---
+
 ## Support
 
 - **Issues:** [GitHub Issues](https://github.com/md-lotfi/gatewire-php/issues)

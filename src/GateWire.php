@@ -17,10 +17,11 @@ class GateWire
     public function __construct(
         protected readonly string $apiKey,
         string $baseUrl = 'https://gatewire.raystate.com/api/v1',
+        ?HttpClient $http = null,
     ) {
         $this->baseUrl = rtrim($baseUrl, '/');
 
-        $this->http = new HttpClient([
+        $this->http = $http ?? new HttpClient([
             'base_uri' => $this->baseUrl . '/',
             'headers'  => [
                 'Authorization' => 'Bearer ' . $this->apiKey,
