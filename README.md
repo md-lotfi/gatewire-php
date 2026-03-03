@@ -5,95 +5,128 @@
 
 The official PHP library for the **[GateWire SMS Infrastructure](https://gatewire.raystate.com)**.
 
-GateWire is a decentralized mesh network that allows developers to send OTPs, notifications, and alerts to North African carriers (**Mobilis**, **Djezzy**, **Ooredoo**) reliably and at a fraction of the cost of international gateways.
+GateWire is a decentralized mesh network that lets developers send OTPs to North African carriers
+(**Mobilis**, **Djezzy**, **Ooredoo**) reliably and at a fraction of the cost of international gateways.
 
-## Features
-
-* 🚀 **Decentralized Routing:** Bypasses international aggregators for lower latency.
-* 💰 **Local Pricing:** Pay in **DZD** (Algerian Dinar) without Forex fees.
-* 🔒 **Secure:** All traffic is encrypted via TLS 1.3.
-* ⚡ **Async Support:** Fire-and-forget dispatch with webhook delivery reports.
+---
 
 ## Requirements
 
-* PHP 8.1 or higher
-* [Composer](https://getcomposer.org/)
-* `guzzlehttp/guzzle` (Installed automatically)
+- PHP **8.1** or higher
+- [Composer](https://getcomposer.org/)
+- `guzzlehttp/guzzle` — installed automatically by Composer
 
 ---
 
 ## Installation
 
-Install the package via Composer:
-
 ```bash
-composer require gatewire/clientQuick Start
+composer require gatewire/client
 ```
+
 ---
 
-### 1. Initialize the Client
-First, obtain your API Key from the GateWire Dashboard.
+## Quick Start
+
+The typical OTP flow uses three methods in sequence.
+
+### 1. Initialize the client
+
+Obtain your API token from the [GateWire Dashboard](https://gatewire.raystate.com).
 
 ```php
 require 'vendor/autoload.php';
 
 use GateWire\GateWire;
 
-// Initialize with your API Key
-$gatewire = new GateWire('sk_live_YOUR_API_KEY_HERE');
+$gw = new GateWire('YOUR_API_TOKEN');
 ```
 
-### 2. Send an SMS (Standard Route)
-Send a simple text message to any Algerian number (+213).
+### 2. Send an OTP
+
+```php
+use GateWire\Exceptions\GateWireException;
+
+try {
+    $res = $gw->dispatch('+213555123456', 'login_otp');
+    // $res['reference_id'] => "wg_01HX..."
+    // $res['status']       => "pending"
+
+    $referenceId = $res['reference_id'];
+} catch (GateWireException $e) {
+    echo 'Error ' . $e->getCode() . ': ' . $e->getMessage();
+}
+```
+
+The second argument (`template_key`) is optional. When omitted, the backend uses your account's
+default OTP template. The message content is always controlled server-side — there is no message
+body parameter.
+
+### 3. Verify the OTP
+
+Once the user submits the code they received, verify it:
 
 ```php
 try {
-    $response = $gatewire->dispatch(
-        to: '+213555123456', 
-        message: 'Your verification code is 849201'
-    );
-
-    echo "Success! Reference ID: " . $response['reference_id'];
-
-} catch (\GateWire\Exceptions\GateWireException $e) {
-    echo "Error: " . $e->getMessage();
+    $result = $gw->verifyOtp($referenceId, $userEnteredCode);
+    // $result['status']  => "verified"
+    // $result['message'] => "Success"
+} catch (GateWireException $e) {
+    // code 400: invalid, expired, cancelled, or already used
+    echo 'Verification failed: ' . $e->getMessage();
 }
 ```
 
-### 3. Send via Template (Priority Route)
-For OTPs and 2FA, we highly recommend using Templates. This ensures your message skips the standard queue and uses the High Priority lane.
+### 4. Check OTP status
+
+Poll or webhook-verify the delivery status at any point:
 
 ```php
-$response = $gatewire->dispatch(
-    to: '+213555123456',
-    options: [
-        'template_key' => 'login_otp', // Defined in your dashboard
-        'priority'     => 'high'       // Force high priority routing
-    ]
-);
+$info = $gw->status($referenceId);
+// $info['reference_id'] => "wg_01HX..."
+// $info['status']       => "sent"
+// $info['created_at']   => "2026-03-03T14:22:00Z"
 ```
-### 4. Check Account Balance
-Retrieve your current remaining credit balance in DZD.
 
-```php
-$balance = $gatewire->getBalance();
-echo "Current Balance: " . $balance . " DZD";
+---
+
+## OTP Lifecycle
+
 ```
+pending → dispatched → sent → verified          (happy path)
+                            → failed            (delivery failed)
+                            → expired           (code TTL exceeded)
+                            → cancelled         (manually cancelled)
+```
+
+| Status       | Meaning                                              |
+|--------------|------------------------------------------------------|
+| `pending`    | OTP queued, awaiting a device to pick it up          |
+| `dispatched` | Assigned to a device, being sent                     |
+| `sent`       | Delivered to the carrier                             |
+| `verified`   | User entered the correct code                        |
+| `failed`     | Delivery failed (device error, carrier rejection)    |
+| `expired`    | Code TTL exceeded before verification                |
+| `cancelled`  | OTP was cancelled before delivery                    |
+
+---
+
 ## Laravel Integration
-If you are using Laravel, you can register the client as a singleton in your AppServiceProvider.
+
+### Register a singleton in `app/Providers/AppServiceProvider.php`
 
 ```php
-app/Providers/AppServiceProvider.php
 use GateWire\GateWire;
 
-public function register()
+public function register(): void
 {
-    $this->app->singleton(GateWire::class, function ($app) {
+    $this->app->singleton(GateWire::class, function () {
         return new GateWire(config('services.gatewire.key'));
     });
 }
-config/services.php
 ```
+
+### Add credentials to `config/services.php`
 
 ```php
 'gatewire' => [
@@ -101,43 +134,92 @@ config/services.php
 ],
 ```
 
-## Usage in Controller:
+### Add the key to `.env`
+
+```
+GATEWIRE_API_KEY=your_api_token_here
+```
+
+### Use via dependency injection
 
 ```php
 use GateWire\GateWire;
+use GateWire\Exceptions\GateWireException;
 
-public function sendOtp(Request $request, GateWire $gatewire)
+class OtpController extends Controller
 {
-    $gatewire->dispatch($request->phone, 'Your code is 123456');
-    return response()->json(['status' => 'sent']);
+    public function send(Request $request, GateWire $gw): JsonResponse
+    {
+        try {
+            $res = $gw->dispatch($request->input('phone'), 'login_otp');
+            return response()->json(['reference_id' => $res['reference_id']]);
+        } catch (GateWireException $e) {
+            return response()->json(['error' => $e->getMessage()], $e->getCode() ?: 500);
+        }
+    }
+
+    public function verify(Request $request, GateWire $gw): JsonResponse
+    {
+        try {
+            $gw->verifyOtp($request->input('reference_id'), $request->input('code'));
+            return response()->json(['verified' => true]);
+        } catch (GateWireException $e) {
+            return response()->json(['error' => $e->getMessage()], 400);
+        }
+    }
 }
 ```
 
+---
+
 ## Error Handling
-The SDK throws GateWire\Exceptions\GateWireException for any API error (4xx or 5xx). You should always wrap your calls in a try-catch block.
+
+All API errors throw `GateWire\Exceptions\GateWireException`. The exception code matches the HTTP
+status code returned by the server.
 
 ```php
 use GateWire\Exceptions\GateWireException;
 
 try {
-    $gatewire->dispatch('+213000000000', 'Hello');
+    $res = $gw->dispatch('+213555123456', 'login_otp');
 } catch (GateWireException $e) {
-    // Handle specific errors
-    if ($e->getCode() === 402) {
-        // "Insufficient Balance"
-    }
-    if ($e->getCode() === 503) {
-        // "No active devices available in the network"
-    }
+    match ($e->getCode()) {
+        400 => /* Invalid or expired OTP code (during verifyOtp) */,
+        402 => /* Insufficient balance — top up your account */,
+        429 => /* Daily or hourly OTP limit reached */,
+        503 => /* No available devices in the network right now */,
+        default => /* Unexpected server error */,
+    };
 }
 ```
 
-## Support & Community
-### Documentation: Read the full docs
+| Code | Meaning                                                          |
+|------|------------------------------------------------------------------|
+| 400  | Invalid, expired, cancelled, or already-used OTP code           |
+| 402  | Insufficient balance                                             |
+| 429  | Daily OTP limit or hourly bonus credit limit reached             |
+| 503  | No available devices to dispatch the OTP                         |
+| 500  | Unexpected server-side error                                     |
 
-### Issues: Report a bug
+---
 
-Email: dev@raystate.com
+## API Reference
+
+Base URL: `https://gatewire.raystate.com/api/v1`
+
+| Method                                  | HTTP call                          | Description          |
+|-----------------------------------------|------------------------------------|----------------------|
+| `dispatch(phone, templateKey?)`         | `POST /send-otp`                   | Send an OTP          |
+| `verifyOtp(referenceId, code)`          | `POST /verify-otp`                 | Verify an OTP code   |
+| `status(referenceId)`                   | `GET  /status/{reference_id}`      | Check OTP status     |
+
+---
+
+## Support
+
+- **Issues:** [GitHub Issues](https://github.com/md-lotfi/gatewire-php/issues)
+- **Email:** dev@raystate.com
 
 ## License
-The GateWire PHP SDK is open-sourced software licensed under the MIT license.
+
+The GateWire PHP SDK is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
